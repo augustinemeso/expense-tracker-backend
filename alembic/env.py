@@ -8,27 +8,26 @@ from alembic import context
 # Load environment variables from .env file
 load_dotenv()
 
-# Import your database models
-from models import Base  # Make sure models inherit from Base
+# Import database extensions
 from extensions import db  # Ensure db is initialized in extensions.py
 
-# This is the Alembic Config object, which provides access to the .ini file values
+# Alembic Config object, provides access to .ini file values
 config = context.config
 
 # Interpret the config file for Python logging
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-# Get the database URL from the environment variables
-config.set_main_option(
-    "sqlalchemy.url",
-    f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-)
+# Set database URL from environment variables
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set!")
 
-# Add target metadata (used for auto-generating migrations)
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+# Set metadata for migrations
 target_metadata = db.metadata
 
-# Run migrations
 def run_migrations_online():
     """Run migrations in 'online' mode (when connected to the DB)."""
     connectable = engine_from_config(
@@ -38,9 +37,7 @@ def run_migrations_online():
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
