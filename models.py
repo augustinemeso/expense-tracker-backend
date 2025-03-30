@@ -7,7 +7,6 @@ from extensions import db  # Ensure `db` is correctly initialized
 from flask_bcrypt import generate_password_hash, check_password_hash
 
 
-db = SQLAlchemy()
 bcrypt = Bcrypt()
 
 class User(db.Model):
@@ -43,3 +42,13 @@ class Expense(db.Model):
     # Relationship to User
     user = db.relationship("User", backref=db.backref("expenses", lazy=True, cascade="all, delete"))
 
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "user_id": str(self.user_id),
+            "amount": self.amount,
+            "category": self.category,
+            "description": self.description,
+            "date": self.date,
+            "created_at": self.created_at
+        }

@@ -6,6 +6,7 @@ from flask_bcrypt import Bcrypt
 from datetime import timedelta
 from dotenv import load_dotenv
 import os
+import uuid
 
 # Import extensions
 from extensions import db  # Ensure `db` is initialized in `extensions.py`
@@ -29,7 +30,7 @@ def create_app():
     jwt = JWTManager(app)
     CORS(app)
 
-    # ✅ Import models to ensure tables are created
+    # ✅ Import models
     from models import User, Expense  # Imported after db.init_app(app)
 
     # ✅ Register routes inside create_app()
@@ -73,6 +74,62 @@ def create_app():
             return jsonify({"token": access_token}), 200
         else:
             return jsonify({"message": "Invalid credentials"}), 401
+
+    # ✅ Add Expense Route
+    @app.route("/expenses", methods=["POST"])
+    @jwt_required()
+    def add_expense():
+        data = request.json
+        user_id = get_jwt_identity()["id"]
+
+        amount = float(data.get("amount")) if data.get("amount") else data.get("amount")
+        category = data.get("category")
+        description = data.get("description", "")
+        date = data.get("date")
+
+        if not amount or not category or not date:
+            return jsonify({"error": "Amount, category, and date are required"}), 400
+
+        new_expense = Expense(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            amount=amount,
+            category=category,
+            description=description,
+            date=date
+        )
+
+        db.session.add(new_expense)
+        db.session.commit()
+
+        return jsonify({"message": "Expense added successfully", "expense": new_expense.to_dict()}), 201
+
+    # ✅ Get All Expenses Route
+    @app.route("/expenses", methods=["GET"])
+    @jwt_required()
+    def get_expenses():
+        user_id = get_jwt_identity()["id"]
+        expenses = Expense.query.filter_by(user_id=user_id).order_by(Expense.date.desc()).all()
+        return jsonify([expense.to_dict() for expense in expenses]), 200
+
+    # ✅ Update Expense Route
+    @app.route("/expenses/<uuid:expense_id>", methods=["PUT"])
+    @jwt_required()
+    def update_expense(expense_id):
+        user_id = get_jwt_identity()["id"]
+        expense = Expense.query.filter_by(id=expense_id, user_id=user_id).first()
+
+        if not expense:
+            return jsonify({"error": "Expense not found"}), 404
+
+        data = request.json
+        expense.amount = data.get("amount", expense.amount)
+        expense.category = data.get("category", expense.category)
+        expense.description = data.get("description", expense.description)
+        expense.date = data.get("date", expense.date)
+
+        db.session.commit()
+        return jsonify({"message": "Expense updated successfully", "expense": expense.to_dict()}), 200
 
     return app  # ✅ Ensure `app` is returned correctly!
 
