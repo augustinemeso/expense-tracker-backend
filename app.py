@@ -8,32 +8,26 @@ from dotenv import load_dotenv
 import os
 import uuid
 
-# Import extensions
-from extensions import db  # Ensure `db` is initialized in `extensions.py`
+from extensions import db
 
-# Load environment variables
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
 
-    # ✅ Configure Flask settings
     app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')  # Change in production
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 
-    # ✅ Initialize extensions
     db.init_app(app)
     migrate = Migrate(app, db)
     bcrypt = Bcrypt(app)
     jwt = JWTManager(app)
     CORS(app)
 
-    # ✅ Import models
-    from models import User, Expense  # Imported after db.init_app(app)
+    from models import User, Expense
 
-    # ✅ Register routes inside create_app()
     @app.route("/register", methods=["POST"])
     def register():
         data = request.json
@@ -44,19 +38,15 @@ def create_app():
         if not name or not email or not password:
             return jsonify({"error": "All fields are required"}), 400
 
-        # Check if user already exists
         if User.query.filter_by(email=email).first():
             return jsonify({"error": "Email already registered"}), 409
 
-        # Create new user
         new_user = User(name=name, email=email)
         new_user.set_password(password)
 
-        # Save to database
         db.session.add(new_user)
         db.session.commit()
 
-        # Generate JWT token
         access_token = create_access_token(identity={"id": str(new_user.id), "email": new_user.email})
 
         return jsonify({"message": "User registered successfully", "token": access_token}), 201
@@ -75,7 +65,6 @@ def create_app():
         else:
             return jsonify({"message": "Invalid credentials"}), 401
 
-    # ✅ Add Expense Route
     @app.route("/expenses", methods=["POST"])
     @jwt_required()
     def add_expense():
@@ -104,7 +93,6 @@ def create_app():
 
         return jsonify({"message": "Expense added successfully", "expense": new_expense.to_dict()}), 201
 
-    # ✅ Get All Expenses Route
     @app.route("/expenses", methods=["GET"])
     @jwt_required()
     def get_expenses():
@@ -112,7 +100,6 @@ def create_app():
         expenses = Expense.query.filter_by(user_id=user_id).order_by(Expense.date.desc()).all()
         return jsonify([expense.to_dict() for expense in expenses]), 200
 
-    # ✅ Update Expense Route
     @app.route("/expenses/<uuid:expense_id>", methods=["PUT"])
     @jwt_required()
     def update_expense(expense_id):
@@ -131,13 +118,12 @@ def create_app():
         db.session.commit()
         return jsonify({"message": "Expense updated successfully", "expense": expense.to_dict()}), 200
 
-    return app  # ✅ Ensure `app` is returned correctly!
+    return app
 
-# ✅ Run the application
 if __name__ == '__main__':
     app = create_app()
-    if app:  # ✅ Ensure app is not None before running
-        port = int(os.environ.get("PORT", 5001))  
+    if app:
+        port = int(os.environ.get("PORT", 5001))
         app.run(debug=True, host='0.0.0.0', port=port)
     else:
         print("Error: create_app() returned None")
