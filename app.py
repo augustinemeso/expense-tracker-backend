@@ -9,25 +9,27 @@ import os
 import uuid
 
 from extensions import db
+from models import User, Expense
 
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
 
+    # Set up app configurations
     app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 
+    # Initialize extensions
     db.init_app(app)
     migrate = Migrate(app, db)
     bcrypt = Bcrypt(app)
     jwt = JWTManager(app)
     CORS(app)
 
-    from models import User, Expense
-
+    # Register user and expense routes
     @app.route("/register", methods=["POST"])
     def register():
         data = request.json
@@ -65,6 +67,7 @@ def create_app():
         else:
             return jsonify({"message": "Invalid credentials"}), 401
 
+    # Add an expense
     @app.route("/expenses", methods=["POST"])
     @jwt_required()
     def add_expense():
@@ -93,13 +96,15 @@ def create_app():
 
         return jsonify({"message": "Expense added successfully", "expense": new_expense.to_dict()}), 201
 
+    # Get all expenses for the logged-in user
     @app.route("/expenses", methods=["GET"])
     @jwt_required()
     def get_expenses():
         user_id = get_jwt_identity()["id"]
         expenses = Expense.query.filter_by(user_id=user_id).order_by(Expense.date.desc()).all()
-        return jsonify([expense.to_dict() for expense in expenses]), 200
+        return jsonify([expense.to_dict() for expense in expenses]), 200  # Returns empty array if no expenses
 
+    # Update an expense
     @app.route("/expenses/<uuid:expense_id>", methods=["PUT"])
     @jwt_required()
     def update_expense(expense_id):
