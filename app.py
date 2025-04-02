@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from flask_migrate import Migrate
 from flask_bcrypt import Bcrypt
-from datetime import timedelta
+from datetime import timedelta, datetime
 from dotenv import load_dotenv
 import os
 import uuid
@@ -29,7 +29,7 @@ def create_app():
     jwt = JWTManager(app)
     CORS(app)
 
-    # Register user and expense routes
+    # Register user
     @app.route("/register", methods=["POST"])
     def register():
         data = request.json
@@ -46,13 +46,16 @@ def create_app():
         new_user = User(name=name, email=email)
         new_user.set_password(password)
 
-        db.session.add(new_user)
-        db.session.commit()
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+            access_token = create_access_token(identity={"id": str(new_user.id), "email": new_user.email})
+            return jsonify({"message": "User registered successfully", "token": access_token}), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
 
-        access_token = create_access_token(identity={"id": str(new_user.id), "email": new_user.email})
-
-        return jsonify({"message": "User registered successfully", "token": access_token}), 201
-
+    
     @app.route("/login", methods=["POST"])
     def login():
         data = request.json
@@ -62,66 +65,53 @@ def create_app():
         user = User.query.filter_by(email=email).first()
 
         if user and user.check_password(password):
-            access_token = create_access_token(identity={"id": str(user.id), "email": user.email})
+            access_token = create_access_token(identity=str(new_user.id))  # Use only the 'id' as the subject
+
             return jsonify({"token": access_token}), 200
         else:
             return jsonify({"message": "Invalid credentials"}), 401
 
-    # Add an expense
+    
     @app.route("/expenses", methods=["POST"])
     @jwt_required()
     def add_expense():
         data = request.json
         user_id = get_jwt_identity()["id"]
 
-        amount = float(data.get("amount")) if data.get("amount") else data.get("amount")
-        category = data.get("category")
-        description = data.get("description", "")
-        date = data.get("date")
+        try:
+            amount = float(data.get("amount"))
+            category = data.get("category")
+            description = data.get("description", "")
+            date = datetime.strptime(data.get("date"), "%Y-%m-%d").date()
 
-        if not amount or not category or not date:
-            return jsonify({"error": "Amount, category, and date are required"}), 400
+            if not amount or not category or not date:
+                return jsonify({"error": "Amount, category, and date are required"}), 400
 
-        new_expense = Expense(
-            id=uuid.uuid4(),
-            user_id=user_id,
-            amount=amount,
-            category=category,
-            description=description,
-            date=date
-        )
+            new_expense = Expense(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                amount=amount,
+                category=category,
+                description=description,
+                date=date
+            )
 
-        db.session.add(new_expense)
-        db.session.commit()
+            db.session.add(new_expense)
+            db.session.commit()
+            
+            return jsonify({"message": "Expense added successfully", "expense": new_expense.to_dict()}), 201
 
-        return jsonify({"message": "Expense added successfully", "expense": new_expense.to_dict()}), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
 
-    # Get all expenses for the logged-in user
+    
     @app.route("/expenses", methods=["GET"])
     @jwt_required()
     def get_expenses():
         user_id = get_jwt_identity()["id"]
         expenses = Expense.query.filter_by(user_id=user_id).order_by(Expense.date.desc()).all()
-        return jsonify([expense.to_dict() for expense in expenses]), 200  # Returns empty array if no expenses
-
-    # Update an expense
-    @app.route("/expenses/<uuid:expense_id>", methods=["PUT"])
-    @jwt_required()
-    def update_expense(expense_id):
-        user_id = get_jwt_identity()["id"]
-        expense = Expense.query.filter_by(id=expense_id, user_id=user_id).first()
-
-        if not expense:
-            return jsonify({"error": "Expense not found"}), 404
-
-        data = request.json
-        expense.amount = data.get("amount", expense.amount)
-        expense.category = data.get("category", expense.category)
-        expense.description = data.get("description", expense.description)
-        expense.date = data.get("date", expense.date)
-
-        db.session.commit()
-        return jsonify({"message": "Expense updated successfully", "expense": expense.to_dict()}), 200
+        return jsonify([expense.to_dict() for expense in expenses]), 200
 
     return app
 
