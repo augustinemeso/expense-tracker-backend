@@ -65,7 +65,7 @@ def create_app():
         user = User.query.filter_by(email=email).first()
 
         if user and user.check_password(password):
-            access_token = create_access_token(identity=str(new_user.id))  # Use only the 'id' as the subject
+            access_token = create_access_token(identity=str(user.id))  # Use only the 'id' as the subject
 
             return jsonify({"token": access_token}), 200
         else:
