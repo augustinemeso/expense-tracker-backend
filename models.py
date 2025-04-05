@@ -4,7 +4,6 @@ from flask_jwt_extended import create_access_token
 from datetime import datetime
 import uuid
 from extensions import db
-from flask_bcrypt import generate_password_hash, check_password_hash
 
 bcrypt = Bcrypt()
 
